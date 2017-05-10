@@ -16,6 +16,7 @@ using namespace android;
 
 #include <fpdfview.h>
 #include <fpdf_doc.h>
+#include <fpdf_formfill.h>
 #include <string>
 
 static Mutex sLibraryLock;
@@ -46,6 +47,7 @@ class DocumentFile {
 
     public:
     FPDF_DOCUMENT pdfDocument = NULL;
+    FPDF_FORMHANDLE m_form = NULL;
     size_t fileSize;
 
     DocumentFile() { initLibraryIfNeed(); }
@@ -136,6 +138,38 @@ jobject NewLong(JNIEnv* env, jlong value) {
 }
 
 extern "C" { //For JNI support
+int PDFForm_Alert(IPDF_JSPLATFORM*, FPDF_WIDESTRING, FPDF_WIDESTRING, int, int)
+{
+  LOGE("%s", "Form_Alert called.\n");
+  return 0;
+}
+
+bool PDFForm_Render(DocumentFile *docFile)
+{
+    IPDF_JSPLATFORM platform_callbacks;
+    FPDF_FORMFILLINFO form_callbacks;
+
+
+    memset(&platform_callbacks, '\0', sizeof(platform_callbacks));
+  	platform_callbacks.version = 1;
+  	platform_callbacks.app_alert = PDFForm_Alert;
+
+
+  	memset(&form_callbacks, '\0', sizeof(form_callbacks));
+  	form_callbacks.version = 1;
+  	form_callbacks.m_pJsPlatform = &platform_callbacks;
+  	docFile->m_form = FPDFDOC_InitFormFillEnvironment(docFile->pdfDocument, &form_callbacks);
+  	if(docFile->m_form == NULL)
+  		return false;
+
+  	FPDF_SetFormFieldHighlightColor(docFile->m_form, 0, 0xFFE4DD);
+  	FPDF_SetFormFieldHighlightAlpha(docFile->m_form, 100);
+  	FORM_DoDocumentJSAction(docFile->m_form);
+  	FORM_DoDocumentOpenAction(docFile->m_form);
+    LOGE("%s", "add form");
+    return true;
+
+}
 
 static int getBlock(void* param, unsigned long position, unsigned char* outBuffer,
         unsigned long size) {
@@ -192,8 +226,9 @@ JNI_FUNC(jlong, PdfiumCore, nativeOpenDocument)(JNI_ARGS, jint fd, jstring passw
 
         return -1;
     }
-
     docFile->pdfDocument = document;
+
+
 
     return reinterpret_cast<jlong>(docFile);
 }
@@ -409,11 +444,11 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPage)(JNI_ARGS, jlong pagePtr, jobject ob
     ANativeWindow_release(nativeWindow);
 }
 
-JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobject bitmap,
+JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong docPtr, jlong pagePtr, jobject bitmap,
                                              jint dpi, jint startX, jint startY,
                                              jint drawSizeHor, jint drawSizeVer,
                                              jboolean renderAnnot){
-
+    DocumentFile *doc = reinterpret_cast<DocumentFile*>(docPtr);
     FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
 
     if(page == NULL || bitmap == NULL){
@@ -475,7 +510,14 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong pagePtr, jobj
                            startX, startY,
                            (int)drawSizeHor, (int)drawSizeVer,
                            0, flags );
-
+   PDFForm_Render(doc);
+   FORM_OnAfterLoadPage(page, doc->m_form);
+   FORM_DoPageAAction(page, doc->m_form, FPDFPAGE_AACTION_OPEN);
+   FPDF_FFLDraw(doc->m_form,
+                pdfBitmap, page,
+                startX, startY,
+                (int)drawSizeHor, (int)drawSizeVer,
+                0, flags );
     AndroidBitmap_unlockPixels(env, bitmap);
 }
 
