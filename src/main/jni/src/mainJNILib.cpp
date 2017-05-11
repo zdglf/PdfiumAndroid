@@ -162,7 +162,7 @@ bool PDFForm_Render(DocumentFile *docFile)
   	if(docFile->m_form == NULL)
   		return false;
 
-  	FPDF_SetFormFieldHighlightColor(docFile->m_form, 0, 0xFFE4DD);
+  	FPDF_SetFormFieldHighlightColor(docFile->m_form, 0, 0xFFFFFF);
   	FPDF_SetFormFieldHighlightAlpha(docFile->m_form, 100);
   	FORM_DoDocumentJSAction(docFile->m_form);
   	FORM_DoDocumentOpenAction(docFile->m_form);
