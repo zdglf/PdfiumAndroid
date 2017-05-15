@@ -19,6 +19,17 @@ using namespace android;
 #include <fpdf_formfill.h>
 #include <string>
 
+#define RGB565_R(p) ((((p) & 0xF800) >> 11) << 3)
+#define RGB565_G(p) ((((p) & 0x7E0 ) >> 5)  << 2)
+#define RGB565_B(p) ( ((p) & 0x1F  )        << 3)
+#define MAKE_RGB565(r,g,b) ((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3))
+
+#define RGBA_A(p) (((p) & 0xFF000000) >> 24)
+#define RGBA_R(p) (((p) & 0x00FF0000) >> 16)
+#define RGBA_G(p) (((p) & 0x0000FF00) >>  8)
+#define RGBA_B(p)  ((p) & 0x000000FF)
+#define MAKE_RGBA(r,g,b,a) (((a) << 24) | ((r) << 16) | ((g) << 8) | (b))
+
 static Mutex sLibraryLock;
 
 static int sLibraryReferenceCount = 0;
@@ -143,6 +154,27 @@ int PDFForm_Alert(IPDF_JSPLATFORM*, FPDF_WIDESTRING, FPDF_WIDESTRING, int, int)
   LOGE("%s", "Form_Alert called.\n");
   return 0;
 }
+
+void changeBitmapBR(AndroidBitmapInfo info, void * pixels){
+  int x = 0, y = 0;
+      // From top to bottom
+      for (y = 0; y < info.height; ++y) {
+          // From left to right
+          for (x = 0; x < info.width; ++x) {
+              int a = 0, r = 0, g = 0, b = 0;
+              void *pixel = NULL;
+              // Get each pixel by format
+              pixel = ((uint32_t *)pixels) + y * info.width + x;
+              uint32_t v = *(uint32_t *)pixel;
+              a = RGBA_A(v);
+              r = RGBA_R(v);
+              g = RGBA_G(v);
+              b = RGBA_B(v);
+              *((uint32_t *)pixel) = MAKE_RGBA(b, g, r, a);
+          }
+      }
+}
+
 
 bool PDFForm_Render(DocumentFile *docFile)
 {
@@ -518,6 +550,8 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong docPtr, jlong
                 startX, startY,
                 (int)drawSizeHor, (int)drawSizeVer,
                 0, flags );
+
+    changeBitmapBR(info, addr);
     AndroidBitmap_unlockPixels(env, bitmap);
 }
 
