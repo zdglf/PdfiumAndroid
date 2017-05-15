@@ -542,6 +542,7 @@ JNI_FUNC(void, PdfiumCore, nativeRenderPageBitmap)(JNI_ARGS, jlong docPtr, jlong
                            startX, startY,
                            (int)drawSizeHor, (int)drawSizeVer,
                            0, flags );
+   changeBitmapBR(info, addr);
    PDFForm_Render(doc);
    FORM_OnAfterLoadPage(page, doc->m_form);
    FORM_DoPageAAction(page, doc->m_form, FPDFPAGE_AACTION_OPEN);
