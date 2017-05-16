@@ -18,17 +18,13 @@ import android.graphics.RectF;
 import android.os.Handler;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
-import android.util.Log;
 import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
-import android.view.ScaleGestureDetector.OnScaleGestureListener;
 import android.view.View;
 import android.widget.Toast;
 
 
-public class PDFView extends View implements  OnScaleGestureListener {
-	private ScaleGestureDetector mScaleDetector;
-//	private HashMap<Integer, Bitmap> pdfBitmapMap = null;
+public class PDFView extends View{
+	//	private HashMap<Integer, Bitmap> pdfBitmapMap = null;
 	private Bitmap pdfBitmap = null;
 	private int currentIndex = 0;
 	private int totalCount = 0;
@@ -50,38 +46,37 @@ public class PDFView extends View implements  OnScaleGestureListener {
 	String filePath = "";
 	ExecutorService cachedThreadPool = Executors.newFixedThreadPool(1);
 	private int bitmapFactor = 2;
-	
+
 	private float sdkInnerScale = 1.f;
 	PdfiumCore core;
 	PdfDocument document;
 	private Handler handler = new Handler(){
 		public void handleMessage(android.os.Message msg) {
 			switch(msg.what){
-			case REDRAW:
-				int page = msg.arg1;
-				currentIndex = page;
-				if(listener!=null){
-					listener.onPageChange(PDFView.this, currentIndex);
-				}
-				invalidate();
-				break;
+				case REDRAW:
+					int page = msg.arg1;
+					currentIndex = page;
+					if(listener!=null){
+						listener.onPageChange(PDFView.this, currentIndex);
+					}
+					invalidate();
+					break;
 			}
 		};
 	};
-	
+
 	public void setTips(List<PDFAreaModel> model){
 		this.tipsModel = model;
 	}
 	public PDFView(Context context, String filePath) {
 		super(context);
 		this.filePath = filePath;
-		
+
 		initData();
 	}
 	private void initData() {
-		
+
 //		pdfBitmapMap = new HashMap<Integer, Bitmap>();
-		mScaleDetector = new ScaleGestureDetector(getContext(), this);
 		try{
 			core = new PdfiumCore(getContext());
 			ParcelFileDescriptor fd = ParcelFileDescriptor.open(new File(filePath), ParcelFileDescriptor.MODE_READ_ONLY);
@@ -91,8 +86,8 @@ public class PDFView extends View implements  OnScaleGestureListener {
 			e.printStackTrace();
 			Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
 		}
-		
-		
+
+
 	}
 
 	public float[] getPDFLocation(float x, float y){
@@ -108,7 +103,7 @@ public class PDFView extends View implements  OnScaleGestureListener {
 		int height = core.getPageHeightPoint(document, page);
 		pageWidth = width/sdkInnerScale;
 		pageHeight = height/sdkInnerScale;
-		
+
 		if(pdfBitmap!=null){
 			pdfBitmap.recycle();
 			pdfBitmap = null;
@@ -118,7 +113,7 @@ public class PDFView extends View implements  OnScaleGestureListener {
 		pdfBitmap.eraseColor(Color.WHITE);
 		core.renderPageBitmap(document, pdfBitmap, page,0, 0, (int)pageWidth*bitmapFactor, (int)pageHeight*bitmapFactor);
 	}
-	
+
 	public void setPage(int page){
 		try{
 			loadPage(page);
@@ -137,15 +132,15 @@ public class PDFView extends View implements  OnScaleGestureListener {
 	public int getCurrentPageIndex(){
 		return currentIndex;
 	}
-	
+
 	public int getPageSize(){
 		return totalCount;
 	}
-	
+
 	public void setListener(PDFViewListener listener){
 		this.listener = listener;
 	}
-	
+
 	public void release(){
 		if(core!=null){
 			try{
@@ -160,9 +155,9 @@ public class PDFView extends View implements  OnScaleGestureListener {
 				e.printStackTrace();
 			}
 		}
-		
+
 	}
-	
+
 	private void loadPage(final int page) throws Exception{
 //		if(pdfBitmapMap.get(page)!=null){
 //			Message msg = new Message();
@@ -172,11 +167,11 @@ public class PDFView extends View implements  OnScaleGestureListener {
 //			return;
 //		}
 		cachedThreadPool.execute(new Runnable() {
-			
+
 			@Override
 			public void run() {
 				try{
-					
+
 					parsePage(page);
 					Message msg = new Message();
 					msg.what = REDRAW;
@@ -185,15 +180,15 @@ public class PDFView extends View implements  OnScaleGestureListener {
 				}catch(Exception e){
 					e.printStackTrace();
 				}
-				
-				
+
+
 			}
 		});
 	}
-	
-	
-	
-	
+
+
+
+
 	@Override
 	protected void onDraw(Canvas canvas) {
 		super.onDraw(canvas);
@@ -234,104 +229,139 @@ public class PDFView extends View implements  OnScaleGestureListener {
 				}
 			}
 		}
-		
+
 	}
-	
+
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
-		mScaleDetector.onTouchEvent(event);
-		Log.i("scale", mScaleDetector.getScaleFactor()+"");
-		if(mScaleDetector.getScaleFactor()==1.0f){
-			onMoveBitmap(event);
-		}
-		
+		onPDFTouch(event);
 		return true;
+	}
+	boolean isLongClick = false;
+	public float []lastx = new float[]{0,0};
+	public float []lasty = new float[]{0,0};
+	public float []downx = new float[]{0,0};
+	public float []downy = new float[]{0,0};
+	public float downScale = 0;
+	private void onPDFTouch(MotionEvent event) {
+		float []tmpx = new float[]{0,0};
+		float []tmpy = new float[]{0,0};
+		int actionIndex;
+		switch (event.getActionMasked()){
+			case MotionEvent.ACTION_POINTER_DOWN:
+				actionIndex = event.getActionIndex();
+				if(actionIndex>=2){
+					return;
+				}
+				lastx[actionIndex] = event.getX(actionIndex);
+				lasty[actionIndex] = event.getY(actionIndex);
+				downx[actionIndex] = lastx[actionIndex];
+				downy[actionIndex] = lasty[actionIndex];
+				downScale = scale;
+
+				break;
+			case MotionEvent.ACTION_POINTER_UP:
+				break;
+			case MotionEvent.ACTION_DOWN:
+				isLongClick = true;
+				lastx[0] = event.getX(0);
+				lasty[0] = event.getY(0);
+				downx[0] = lastx[0];
+				downy[0] = lasty[0];
+				break;
+			case MotionEvent.ACTION_UP:
+				break;
+			case MotionEvent.ACTION_MOVE:
+				if(event.getPointerCount()==1){
+					//单手
+					tmpx[0] = event.getX(0);
+					tmpy[0] = event.getY(0);
+					//移动图片
+					float width = bitmapFactor*pageWidth*scale;
+					float height = bitmapFactor * pageHeight*scale;
+					float testX = translateX;
+					float testY = translateY;
+					testX -= (lastx[0]-tmpx[0]);
+					testY -= (lasty[0]-tmpy[0]);
+					if(translateX>0&&testX>0&&testX<translateX){
+						translateX = (int)testX;
+					}
+					if(translateY>0&&testY>0&&testY<translateY){
+						translateY = (int)testY;
+					}
+					if(testX<0&&testX+width>displayWidth){
+						translateX = (int)testX;
+					}
+					if(testY<0&&testY+height>displayHeight){
+						translateY = (int)testY;
+					}
+					if(translateX<0&&testX<0&&testX>translateX){
+						translateX = (int)testX;
+					}
+					if(translateY<0&&testY<0&&testY>translateY){
+						translateY = (int)testY;
+					}
+					invalidate();
+
+					lastx[0] = tmpx[0];
+					lasty[0] = tmpy[0];
+				}else if(event.getPointerCount()>=2){
+					//双手
+					tmpx[0] = event.getX(0);
+					tmpy[0] = event.getY(0);
+					tmpx[1] = event.getX(1);
+					tmpy[1] = event.getY(1);
+
+					float width = bitmapFactor*pageWidth*scale;
+					float height = bitmapFactor * pageHeight*scale;
+					float userScale = distance(tmpx[0], tmpy[0], tmpx[1], tmpy[1])/distance(downx[0], downy[0], downx[1], downy[1]);
+					float testScale = userScale*downScale;
+					if(testScale<defaultScale){
+						testScale= defaultScale;
+					}
+					if(testScale>maxScale){
+						testScale = maxScale;
+					}
+					float testX = translateX;
+					float testY = translateY;
+
+					float centerX = (downx[0]+downx[1])/2/testScale;
+					float centerY = (downy[0]+downy[1])/2/testScale;
+					testX = centerX-width/2.f;
+					testY = centerY-height/2.f;
+					if(testX+width<displayWidth){
+						testX = displayWidth - width;
+					}
+					if(testY+height<displayHeight){
+						testY = displayHeight - height;
+					}
+					if(testX>0){
+						testX = 0;
+					}
+					if(testY>0){
+						testY = 0;
+					}
+
+
+					if(Math.abs(testScale-scale)>0.01){
+						translateX = (int)testX;
+						translateY = (int)testY;
+						scale = testScale;
+					}
+					invalidate();
+					lastx[0] = tmpx[0];
+					lasty[0] = tmpy[0];
+					lastx[1] = tmpx[1];
+					lasty[1] = tmpy[1];
+
+
+				}
+				break;
+		}
 	}
 
 
-	
-	float lastMoveX = 0;
-	float lastMoveY = 0;
-	private void onMoveBitmap(MotionEvent event) {
-		float currentX = event.getX();
-		float currentY = event.getY();
-		if(event.getAction() == MotionEvent.ACTION_MOVE){
-			float width = bitmapFactor*pageWidth*scale;
-			float height = bitmapFactor * pageHeight*scale;
-			float testX = translateX;
-			float testY = translateY;
-			testX -= (((lastMoveX-currentX)/scale)*3);
-			testY -= (((lastMoveY-currentY)/scale)*3);
-			if(testX<0&&testX+width>displayWidth){
-				translateX = (int)testX;
-			}
-			if(testY<0&&testY+height>displayHeight){
-				translateY = (int)testY;
-			}
-			lastMoveX = currentX;
-			lastMoveY = currentY;
-			invalidate();
-		}else if(event.getAction()==MotionEvent.ACTION_DOWN){
-			lastMoveX = currentX;
-			lastMoveY = currentY;
-		}
+	private float distance(float x1, float y1, float x2, float y2){
+		return (float) Math.sqrt((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2));
 	}
-	@Override
-	public boolean onScale(ScaleGestureDetector arg0) {
-		float width = bitmapFactor*pageWidth*scale;
-		float height = bitmapFactor * pageHeight*scale;
-		float userScale = arg0.getScaleFactor();
-		Log.i("onScale", arg0.getScaleFactor()+"");
-		float testScale = userScale*scale;
-		if(testScale<defaultScale){
-			testScale= defaultScale;
-		}
-		if(testScale>maxScale){
-			testScale = maxScale;
-		}
-		int testX = translateX;
-		int testY = translateY;
-		
-		int centerX = (int)(arg0.getFocusX()/testScale);
-		int centerY = (int)(arg0.getFocusY()/testScale);
-		testX = (int)(centerX-width/2.f);
-		testY = (int)(centerY-height/2.f);
-		if(testX>0){
-			testX = 0;
-		}
-		if(testY>0){
-			testY = 0;
-		}
-		if(testX+width<displayWidth){
-			testX = (int)(displayWidth - width);
-		}
-		if(testY+height<displayHeight){
-			testY = (int)(displayHeight - height);
-		}
-		
-		if(Math.abs(testScale-scale)>0.01){
-			translateX = testX;
-			translateY = testY;
-			lastScale = scale;
-			scale = testScale;
-		}else{
-			lastScale = scale;
-		}
-		invalidate();
-		return true;
-	}
-	@Override
-	public boolean onScaleBegin(ScaleGestureDetector arg0) {
-		
-		
-		
-		return true;
-	}
-	@Override
-	public void onScaleEnd(ScaleGestureDetector arg0) {
-		
-	}
-	
-	
-
 }
