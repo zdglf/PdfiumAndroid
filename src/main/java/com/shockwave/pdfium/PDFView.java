@@ -322,25 +322,11 @@ public class PDFView extends View{
 					if(testScale>maxScale){
 						testScale = maxScale;
 					}
-					float testX = translateX;
-					float testY = translateY;
 
-					float centerX = (downx[0]+downx[1])/2/testScale;
-					float centerY = (downy[0]+downy[1])/2/testScale;
-					testX = centerX-width/2.f;
-					testY = centerY-height/2.f;
-					if(testX+width<displayWidth){
-						testX = displayWidth - width;
-					}
-					if(testY+height<displayHeight){
-						testY = displayHeight - height;
-					}
-					if(testX>0){
-						testX = 0;
-					}
-					if(testY>0){
-						testY = 0;
-					}
+					float centerX = (downx[0]+downx[1])/2;
+					float centerY = (downy[0]+downy[1])/2;
+					float testX = (testScale/scale)*(translateX-centerX)+centerX;
+					float testY = (testScale/scale)*(translateY-centerY)+centerY;
 
 
 					if(Math.abs(testScale-scale)>0.01){
