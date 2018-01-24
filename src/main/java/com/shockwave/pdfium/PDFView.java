@@ -1,11 +1,5 @@
 package com.shockwave.pdfium;
 
-import java.io.File;
-
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
@@ -23,8 +17,15 @@ import android.view.View;
 import android.widget.Toast;
 
 
+import java.io.File;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+
 public class PDFView extends View{
-	//	private HashMap<Integer, Bitmap> pdfBitmapMap = null;
+
+	private static final long LONG_CLICK_TIME = 1500;
 	private Bitmap pdfBitmap = null;
 	private int currentIndex = 0;
 	private int totalCount = 0;
@@ -46,6 +47,7 @@ public class PDFView extends View{
 	String filePath = "";
 	ExecutorService cachedThreadPool = Executors.newFixedThreadPool(1);
 	private int bitmapFactor = 2;
+	private Runnable longClickedRunable = null;
 
 	private float sdkInnerScale = 1.f;
 	PdfiumCore core;
@@ -76,7 +78,6 @@ public class PDFView extends View{
 	}
 	private void initData() {
 
-//		pdfBitmapMap = new HashMap<Integer, Bitmap>();
 		try{
 			core = new PdfiumCore(getContext());
 			ParcelFileDescriptor fd = ParcelFileDescriptor.open(new File(filePath), ParcelFileDescriptor.MODE_READ_ONLY);
@@ -159,13 +160,6 @@ public class PDFView extends View{
 	}
 
 	private void loadPage(final int page) throws Exception{
-//		if(pdfBitmapMap.get(page)!=null){
-//			Message msg = new Message();
-//			msg.what = REDRAW;
-//			msg.arg1 = page;
-//			handler.sendMessage(msg);
-//			return;
-//		}
 		cachedThreadPool.execute(new Runnable() {
 
 			@Override
@@ -194,7 +188,6 @@ public class PDFView extends View{
 		super.onDraw(canvas);
 		displayWidth = canvas.getWidth();
 		displayHeight = canvas.getHeight();
-//		Bitmap pdfBitmap = pdfBitmapMap.get(currentIndex);
 		if(pdfBitmap!=null){
 			int pdfWidth = pdfBitmap.getWidth();
 			int pdfHeight = pdfBitmap.getHeight();
@@ -238,6 +231,8 @@ public class PDFView extends View{
 		return true;
 	}
 	boolean isLongClick = false;
+	public float accuracy = 10.0f;
+
 	public float []lastx = new float[]{0,0};
 	public float []lasty = new float[]{0,0};
 	public float []downx = new float[]{0,0};
@@ -251,7 +246,13 @@ public class PDFView extends View{
 			case MotionEvent.ACTION_POINTER_DOWN:
 				actionIndex = event.getActionIndex();
 				if(actionIndex>=2){
+					isLongClick = false;
+					removeLongClickedEvent();
 					return;
+				}
+				if(actionIndex==2){
+					isLongClick = false;
+					removeLongClickedEvent();
 				}
 				lastx[actionIndex] = event.getX(actionIndex);
 				lasty[actionIndex] = event.getY(actionIndex);
@@ -261,21 +262,39 @@ public class PDFView extends View{
 
 				break;
 			case MotionEvent.ACTION_POINTER_UP:
+				isLongClick = false;
+				removeLongClickedEvent();
 				break;
 			case MotionEvent.ACTION_DOWN:
 				isLongClick = true;
+				removeLongClickedEvent();
+				longClickedRunable = new Runnable() {
+					@Override
+					public void run() {
+						if(isLongClick&&listener!=null){
+							listener.onLongClick(PDFView.this, downx[0], downy[0]);
+						}
+					}
+				};
+				handler.postDelayed(longClickedRunable, LONG_CLICK_TIME);
 				lastx[0] = event.getX(0);
 				lasty[0] = event.getY(0);
 				downx[0] = lastx[0];
 				downy[0] = lasty[0];
 				break;
 			case MotionEvent.ACTION_UP:
+				isLongClick = false;
+				removeLongClickedEvent();
 				break;
 			case MotionEvent.ACTION_MOVE:
 				if(event.getPointerCount()==1){
 					//单手
 					tmpx[0] = event.getX(0);
 					tmpy[0] = event.getY(0);
+					if(Math.abs(downx[0]-tmpx[0])>accuracy||Math.abs(downy[0]-tmpy[0])>accuracy){
+						isLongClick = false;
+						removeLongClickedEvent();
+					}
 					//移动图片
 					float width = bitmapFactor*pageWidth*scale;
 					float height = bitmapFactor * pageHeight*scale;
@@ -306,6 +325,8 @@ public class PDFView extends View{
 					lastx[0] = tmpx[0];
 					lasty[0] = tmpy[0];
 				}else if(event.getPointerCount()>=2){
+					isLongClick = false;
+					removeLongClickedEvent();
 					//双手
 					tmpx[0] = event.getX(0);
 					tmpy[0] = event.getY(0);
@@ -341,8 +362,18 @@ public class PDFView extends View{
 					lasty[1] = tmpy[1];
 
 
+				}else{
+					isLongClick = false;
+					removeLongClickedEvent();
 				}
 				break;
+		}
+	}
+
+	private void removeLongClickedEvent() {
+		if(longClickedRunable!=null){
+			handler.removeCallbacks(longClickedRunable);
+			longClickedRunable = null;
 		}
 	}
 
@@ -350,4 +381,7 @@ public class PDFView extends View{
 	private float distance(float x1, float y1, float x2, float y2){
 		return (float) Math.sqrt((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2));
 	}
+
+
+
 }
